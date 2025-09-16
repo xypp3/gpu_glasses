@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <title>Plotly CSV Viewer</title>
+  <!-- Plotly -->
+  <script src="https://cdn.plot.ly/plotly-2.24.2.min.js"></script>
+  <!-- PapaParse for CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 16px;
+    }
+
+    #controls {
+      margin-bottom: 12px;
+    }
+
+    #plot {
+      width: 100%;
+      height: 600px;
+    }
+
+    .small {
+      font-size: 0.9em;
+      color: #555;
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Plotly CSV Viewer</h2>
+
+  <div id="controls">
+    <input type="file" id="fileInput" accept=".csv,text/csv" />
+    <span class="small"> Choose a CSV with columns: <code>gpu, util</code></span>
+    <select id="plotType" title="Plot type" style="margin-left:12px;">
+      <option value="line">Line + markers</option>
+      <option value="box">Boxplot</option>
+      <option value="bar">Bar (avg per GPU)</option>
+    </select>
+  </div>
+
+  <div id="plot"></div>
+
+  <script>
+    const fileInput = document.getElementById('fileInput');
+    const plotType = document.getElementById('plotType');
+    const plotDiv = document.getElementById('plot');
+
+    fileInput.addEventListener('change', handleFile, false);
+    plotType.addEventListener('change', () => {
+      // re-plot if we already have parsed data
+      if (window._parsedData) {
+        plotData(window._parsedData);
+      }
+    });
+
+    function handleFile(evt) {
+      const file = evt.target.files && evt.target.files[0];
+      if (!file) return;
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        dynamicTyping: true,
+        complete: function (results) {
+          // results.data is an array of objects keyed by header
+          // Normalize keys to lower-case and trim
+          const rows = results.data.map(r => {
+            const obj = {};
+            for (const k in r) {
+              if (!Object.prototype.hasOwnProperty.call(r, k)) continue;
+              const key = k.trim().toLowerCase().replace(".", "_");
+              obj[key] = r[k];
+            }
+            return obj;
+          });
+          window._parsedData = rows;
+          plotData(rows);
+        },
+        error: function (err) {
+          alert('CSV parse error: ' + err);
+        }
+      });
+    }
+
+    function plotData(rows) {
+      // Expect rows like { gpu: 0, util: 50 } — gpu may be number or string
+      // Group util values by GPU id
+      const groups = {};
+      rows.forEach((r, i) => {
+        // handle missing or malformed
+        if (r.gpu === undefined || r.power_draw === undefined) return;
+        const gpuId = String(r.gpu).trim();
+        const utilVal = Number(r.power_draw);
+        if (Number.isNaN(utilVal)) return;
+        if (!groups[gpuId]) groups[gpuId] = {utils: [], idx: []};
+        groups[gpuId].utils.push(utilVal);
+        groups[gpuId].idx.push(groups[gpuId].utils.length - 1); // index within that GPU series
+      });
+
+      const selectedType = plotType.value;
+      let traces = [];
+
+      if (selectedType === 'line') {
+        // For line we plot each GPU's utils over sample order (index)
+        Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(gpuId => {
+          traces.push({
+            x: groups[gpuId].idx.map((_, i) => i + 1), // simple sample index
+            y: groups[gpuId].utils,
+            mode: 'lines+markers',
+            name: 'GPU ' + gpuId,
+            type: 'scatter'
+          });
+        });
+      } else if (selectedType === 'box') {
+        // A boxplot per GPU
+        Object.keys(groups).sort((a, b) => Number(a) - Number(b)).forEach(gpuId => {
+          traces.push({
+            y: groups[gpuId].utils,
+            name: 'GPU ' + gpuId,
+            type: 'box'
+          });
+        });
+      } else if (selectedType === 'bar') {
+        // Bar plot of average util per GPU
+        const gkeys = Object.keys(groups).sort((a, b) => Number(a) - Number(b));
+        traces = [{
+          x: gkeys.map(k => 'GPU ' + k),
+          y: gkeys.map(k => {
+            const arr = groups[k].utils;
+            const sum = arr.reduce((s, v) => s + v, 0);
+            return arr.length ? sum / arr.length : 0;
+          }),
+          type: 'bar',
+          marker: {color: 'steelblue'}
+        }];
+      }
+
+      const layout = {
+        title: 'GPU Utilization',
+        xaxis: {title: selectedType === 'line' ? 'Sample Index (per GPU series)' : ''},
+        yaxis: {title: 'util (%)', range: [0, 100]},
+        margin: {t: 40, l: 60, r: 20, b: 60}
+      };
+
+      Plotly.newPlot(plotDiv, traces, layout, {responsive: true});
+    }
+  </script>
+</body>
+
+</html>

@@ -48,33 +48,46 @@
 
     const groups = {};
 
+    let yMax = 0;
     dataFile.parsedRows.forEach((row) => {
-      if (row.gpu === undefined || row[yKey] === undefined) return;
-      const gpuId = String(row.gpu).trim();
+      // console.log(row)
+      if (row.index === undefined || row[yKey] === undefined) return;
+
+      const gpuId = String(row.index).trim();
       const yVal = Number(row[yKey]);
+
       if (Number.isNaN(yVal)) return;
       if (!groups[gpuId]) groups[gpuId] = { ys: [], idx: [] };
+
       groups[gpuId].ys.push(yVal);
       groups[gpuId].idx.push(groups[gpuId].ys.length - 1);
+
+      if (yVal > yMax) {
+        yMax = yVal;
+      }
     });
 
-    const gkeys = Object.keys(groups).sort((a, b) => Number(a) - Number(b));
-
+    let xMax = 0;
     let traces = [];
-    gkeys.forEach((gpuId) => {
+    Object.keys(groups).forEach((k) => {
       traces.push({
-        x: groups[gpuId].idx.map((_, i) => i + 1),
-        y: groups[gpuId].ys,
+        x: groups[k].idx.map((_, i) => i + 1),
+        y: groups[k].ys,
         mode: 'lines+markers',
-        name: 'GPU ' + gpuId,
+        name: 'GPU ' + k,
         type: 'scatter'
       });
+
+      if (groups[k].length > xMax) {
+        xMax = groups[k].length
+      }
     });
 
+    console.log(groups)
     const layout = {
       title: 'GPU Metrics',
-      xaxis: { title: 'Sample Index (per GPU series)' },
-      yaxis: { title: yKey },
+      xaxis: { title: 'Sample Index (per GPU series)', range: [0, xMax] },
+      yaxis: { title: yKey, range: [0, yMax] },
       margin: { t: 20, l: 60, r: 20, b: 60 }
     };
 

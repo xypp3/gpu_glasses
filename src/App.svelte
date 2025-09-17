@@ -3,16 +3,18 @@
   import Plotly from 'plotly.js-dist-min';
   import { onMount } from 'svelte';
 
-  let parsedRows = [];
+  let dataFile = {
+    parsedRows: [],
+    columns:  []
+  }
   let plotDivEl;
-  let columns = [];
   let currCol = "";
 
   function normalizeRowKeys(row) {
     const normalized = {};
     for (const key in row) {
       if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
-      const nk = key.trim().toLowerCase().replace('.', '_');
+      const nk = key.trim().toLowerCase().replace('.', '_').replace(' ', '_');
       normalized[nk] = row[key];
     }
     return normalized;
@@ -26,10 +28,9 @@
       skipEmptyLines: true,
       dynamicTyping: true,
       complete: (results) => {
-        parsedRows = results.data.map(normalizeRowKeys);
-        console.log(parsedRows)
-        columns = Object.keys(parsedRows[0]).filter(k => !["timestamp", "index", "gpu"].includes(k))
-        plotData();
+        dataFile.parsedRows = results.data.map(normalizeRowKeys);
+        console.log(dataFile.parsedRows)
+        dataFile.columns = Object.keys(dataFile.parsedRows[0]).filter(k => !["timestamp", "index", "gpu"].includes(k))
       },
       error: (err) => {
         alert('CSV parse error: ' + err);
@@ -37,18 +38,17 @@
     });
   }
 
-  function plotData() {
+  function plotData(yKey) {
     if (!plotDivEl) return;
 
-    const groups = {};
-    let yKey = 'util';
-    // fallback for datasets that have power_draw instead of util
-    const sampleHasUtil = parsedRows.some(r => r.util !== undefined);
-    if (!sampleHasUtil) {
-      yKey = 'power_draw';
+    if (!dataFile.columns.includes(yKey)){
+      console.log("key "+yKey+" not found")
+      return;
     }
 
-    parsedRows.forEach((row) => {
+    const groups = {};
+
+    dataFile.parsedRows.forEach((row) => {
       if (row.gpu === undefined || row[yKey] === undefined) return;
       const gpuId = String(row.gpu).trim();
       const yVal = Number(row[yKey]);
@@ -71,19 +71,18 @@
       });
     });
 
-    const yAxisTitle = yKey === 'util' ? 'util (%)' : 'power draw (W)';
     const layout = {
       title: 'GPU Metrics',
       xaxis: { title: 'Sample Index (per GPU series)' },
-      yaxis: { title: yAxisTitle },
-      margin: { t: 40, l: 60, r: 20, b: 60 }
+      yaxis: { title: yKey },
+      margin: { t: 20, l: 60, r: 20, b: 60 }
     };
 
     Plotly.newPlot(plotDivEl, traces, layout, { responsive: true });
   }
 
-  $: if (parsedRows && parsedRows.length) {
-    plotData();
+  $: if (currCol) {
+    plotData(currCol);
   }
 </script>
 
@@ -108,10 +107,10 @@
 <h2>Plotly CSV Viewer</h2>
 <div class="controls">
   <input type="file" accept=".csv,text/csv" on:change={handleFileChange} />
-  <span class="small"> Choose a CSV with columns: <code>gpu</code>, and <code>util</code> or <code>power.draw</code></span>
+  <span class="small"> Choose a CSV with columns: <code>gpu</code>, and <code>{currCol}</code>
   <select bind:value={currCol} title="Plot type" style="margin-left:12px;">
-    {#each columns as col}
-      <option value={col}>{col}</option>
+    {#each dataFile.columns as col}
+      <option value={col} selected={col === currCol}>{col}</option>
     {/each}
   </select>
 </div>

@@ -89,8 +89,7 @@
     const layout = {
       title: 'GPU Metrics',
       xaxis: { title: 'Sample Index (per GPU series)', range: [-xPad, xMax+xPad] },
-      yaxis: { title: y_key, range: [-yPad, yMax+yPad] },
-      margin: { t: 20, l: 60, r: 20, b: 60 }
+      yaxis: { title: y_key, range: [-yPad, yMax+yPad] }
     };
 
     Plotly.newPlot(plotSelections[plot_ind].plot, traces, layout, { responsive: true });
@@ -111,7 +110,8 @@
   }
   .plot {
     width: 100%;
-    height: 600px;
+    aspect-ratio: 16 / 9;
+    height: auto;
   }
 .plots-grid {
     display: grid;

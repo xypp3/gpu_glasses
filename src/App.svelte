@@ -17,6 +17,7 @@
       const nk = key.trim().toLowerCase().replace('.', '_').replace(' ', '_');
       normalized[nk] = row[key];
     }
+    normalized.timestamp = Date.parse(normalized.timestamp);
     return normalized;
   }
 
@@ -30,7 +31,7 @@
       complete: (results) => {
         dataFile.parsedRows = results.data.map(normalizeRowKeys);
         dataFile.columns = Object.keys(dataFile.parsedRows[0]).filter(k => !["timestamp", "index", "gpu"].includes(k))
-        plotSelections.push(dataFile);
+        console.log(dataFile)
       },
       error: (err) => {
         alert('CSV parse error: ' + err);
@@ -50,45 +51,40 @@
 
     let yMax = 0;
     dataFile.parsedRows.forEach((row) => {
-      // console.log(row)
-      if (row.index === undefined || row[y_key] === undefined) return;
+      if (row.index === undefined || row[y_key] === undefined || !row.timestamp) return;
 
       const gpuId = String(row.index).trim();
       const yVal = Number(row[y_key]);
+      const xVal = row.timestamp;
 
-      if (Number.isNaN(yVal)) return;
-      if (!groups[gpuId]) groups[gpuId] = { ys: [], idx: [] };
+      if (Number.isNaN(yVal)) {
+        console.error("nan timestamp at row "+row+" and y_key "+y_key);
+        return;
+      }
+      if (!groups[gpuId]) groups[gpuId] = [];
 
-      groups[gpuId].ys.push(yVal);
-      groups[gpuId].idx.push(groups[gpuId].ys.length - 1);
+      groups[gpuId].push({ x: xVal, y: yVal });
 
       if (yVal > yMax) {
         yMax = yVal;
       }
     });
 
-    let xMax = 0;
     let traces = [];
     Object.keys(groups).forEach((k) => {
       traces.push({
-        x: groups[k].idx.map((_, i) => i + 1),
-        y: groups[k].ys,
+        x: groups[k].map(p => p.x),
+        y: groups[k].map(p => p.y),
         mode: 'lines+markers',
         name: 'GPU ' + k,
         type: 'scatter'
       });
-
-      if (groups[k].idx.length > xMax) {
-        xMax = groups[k].idx.length
-      }
     });
 
-
-    let xPad = 0.1*xMax
     let yPad = 0.1*yMax
     const layout = {
       title: 'GPU Metrics',
-      xaxis: { title: 'Sample Index (per GPU series)', range: [-xPad, xMax+xPad] },
+      xaxis: { title: 'Timestamp', type: 'date' },
       yaxis: { title: y_key, range: [-yPad, yMax+yPad] }
     };
 

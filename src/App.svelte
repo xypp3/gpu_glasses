@@ -4,8 +4,9 @@
   import { onMount } from 'svelte';
 
   let parsedRows = [];
-  let plotType = 'line';
   let plotDivEl;
+  let columns = [];
+  let currCol = "";
 
   function normalizeRowKeys(row) {
     const normalized = {};
@@ -26,6 +27,8 @@
       dynamicTyping: true,
       complete: (results) => {
         parsedRows = results.data.map(normalizeRowKeys);
+        console.log(parsedRows)
+        columns = Object.keys(parsedRows[0]).filter(k => !["timestamp", "index", "gpu"].includes(k))
         plotData();
       },
       error: (err) => {
@@ -58,41 +61,20 @@
     const gkeys = Object.keys(groups).sort((a, b) => Number(a) - Number(b));
 
     let traces = [];
-    if (plotType === 'line') {
-      gkeys.forEach((gpuId) => {
-        traces.push({
-          x: groups[gpuId].idx.map((_, i) => i + 1),
-          y: groups[gpuId].ys,
-          mode: 'lines+markers',
-          name: 'GPU ' + gpuId,
-          type: 'scatter'
-        });
+    gkeys.forEach((gpuId) => {
+      traces.push({
+        x: groups[gpuId].idx.map((_, i) => i + 1),
+        y: groups[gpuId].ys,
+        mode: 'lines+markers',
+        name: 'GPU ' + gpuId,
+        type: 'scatter'
       });
-    } else if (plotType === 'box') {
-      gkeys.forEach((gpuId) => {
-        traces.push({
-          y: groups[gpuId].ys,
-          name: 'GPU ' + gpuId,
-          type: 'box'
-        });
-      });
-    } else if (plotType === 'bar') {
-      traces = [{
-        x: gkeys.map(k => 'GPU ' + k),
-        y: gkeys.map(k => {
-          const arr = groups[k].ys;
-          const sum = arr.reduce((s, v) => s + v, 0);
-          return arr.length ? sum / arr.length : 0;
-        }),
-        type: 'bar',
-        marker: { color: 'steelblue' }
-      }];
-    }
+    });
 
     const yAxisTitle = yKey === 'util' ? 'util (%)' : 'power draw (W)';
     const layout = {
       title: 'GPU Metrics',
-      xaxis: { title: plotType === 'line' ? 'Sample Index (per GPU series)' : '' },
+      xaxis: { title: 'Sample Index (per GPU series)' },
       yaxis: { title: yAxisTitle },
       margin: { t: 40, l: 60, r: 20, b: 60 }
     };
@@ -101,7 +83,6 @@
   }
 
   $: if (parsedRows && parsedRows.length) {
-    // re-plot when plotType changes
     plotData();
   }
 </script>
@@ -128,10 +109,10 @@
 <div class="controls">
   <input type="file" accept=".csv,text/csv" on:change={handleFileChange} />
   <span class="small"> Choose a CSV with columns: <code>gpu</code>, and <code>util</code> or <code>power.draw</code></span>
-  <select bind:value={plotType} title="Plot type" style="margin-left:12px;">
-    <option value="line">Line + markers</option>
-    <option value="box">Boxplot</option>
-    <option value="bar">Bar (avg per GPU)</option>
+  <select bind:value={currCol} title="Plot type" style="margin-left:12px;">
+    {#each columns as col}
+      <option value={col}>{col}</option>
+    {/each}
   </select>
 </div>
 <div bind:this={plotDivEl} class="plot"></div> 

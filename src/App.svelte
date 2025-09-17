@@ -78,16 +78,18 @@
         type: 'scatter'
       });
 
-      if (groups[k].length > xMax) {
-        xMax = groups[k].length
+      if (groups[k].idx.length > xMax) {
+        xMax = groups[k].idx.length
       }
     });
 
-    console.log(groups)
+
+    let xPad = 0.1*xMax
+    let yPad = 0.1*yMax
     const layout = {
       title: 'GPU Metrics',
-      xaxis: { title: 'Sample Index (per GPU series)', range: [0, xMax] },
-      yaxis: { title: yKey, range: [0, yMax] },
+      xaxis: { title: 'Sample Index (per GPU series)', range: [-xPad, xMax+xPad] },
+      yaxis: { title: yKey, range: [-yPad, yMax+yPad] },
       margin: { t: 20, l: 60, r: 20, b: 60 }
     };
 
